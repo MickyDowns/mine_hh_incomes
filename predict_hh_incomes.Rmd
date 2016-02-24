@@ -1,0 +1,460 @@
+---
+title: "predicting household income"
+output: html_document
+---
+
+## using trees
+
+```{r}
+library(rpart)
+library(caret)
+library(rattle)
+
+incDat=read.csv("Income_Data.txt",header=FALSE,sep=",",
+                  quote="\"",dec=".",fill=TRUE,comment.char="")
+
+colnames(incDat)=c("hhAnnInc","sex","mStatus","age","education","occupation","areaLive","dualIncome","hhPersonsAll","hhPersons18","hhStatus","homeType","ethnic","language")
+
+# check NAs
+sum(is.na(incDat))/(dim(incDat)[1]*dim(incDat)[2])
+for(i in 1:dim(incDat)[2]){print(sum(is.na(incDat[,i]))/dim(incDat)[1])}
+
+# type factor variables
+#incDat$hhAnnInc=factor(incDat$hhAnnInc, 
+#                          levels = c("1","2","3","4","5","6","7","8","9"))
+#incDat$hhAnnInc=ordered(incDat$hhAnnInc, 
+#                           levels = c("1","2","3","4","5","6","7","8","9"))
+
+incDat$age=factor(incDat$age,levels = c("1","2","3","4","5","6","7"))
+incDat$age=ordered(incDat$age,levels = c("1","2","3","4","5","6","7"))
+
+incDat$education=factor(incDat$education,levels = c("1","2","3","4","5","6"))
+incDat$education=ordered(incDat$education,levels = c("1","2","3","4","5","6"))
+
+incDat$area_live=factor(incDat$area_live,levels = c("1","2","3","4","5"))
+incDat$area_live=ordered(incDat$area_live,levels = c("1","2","3","4","5"))
+
+for(i in c(2,3,6,8,11,12,13,14)){incDat[,i]=as.factor(incDat[,i])}
+
+# set y to mean of range
+incLevels=unique(incDat$hhAnnInc);incLevels=incLevels[order(incLevels,decreasing=F)]
+incMeans=c(5,12.5,17.5,22.5,27.5,35,45,62.5,87.5)
+for(i in incLevels){incDat$hhAnnInc[incDat$hhAnnInc==i]=incMeans[i]}
+
+set=as.data.frame(matrix(data=c(
+     10,0.01,4,5,2,0,30,
+     40,0.01,4,5,2,0,30,
+     20,0.002,4,5,2,0,30,
+     20,0.0075,4,5,2,0,30,
+     20,0.01,2,5,2,0,30,
+     20,0.01,8,5,2,0,30,
+     20,0.01,4,2,2,0,30,
+     20,0.01,4,10,2,0,30,
+     20,0.01,4,5,0,0,30,
+     20,0.01,4,5,1,0,30,
+     20,0.01,4,5,2,1,30,
+     20,0.01,4,5,2,1,15
+     ),nrow=12,ncol=7,byrow=T),stringsAsFactors=F)
+
+rmse=matrix(NA,3,12)
+
+for(j in 1:dim(rmse)[1]){
+     inTrain=createDataPartition(y=incDat$hhAnnInc,p=0.7,list=FALSE)
+     training=incDat[inTrain,]
+     testing=incDat[-inTrain,]
+     
+     for(i in 1:dim(set)[1]){
+          fit=rpart(hhAnnInc~.,data=training,
+                    control=rpart.control(minsplit=set[i,1],cp=set[i,2],maxcompete=set[i,3],
+                                          maxsurrogate=set[i,4],usesurrogate=set[i,5],
+                                          xval=10,surrogatestyle=set[i,6],maxdepth=set[i,7]))
+          
+          pred=predict(fit,newdata=testing)
+          rmse[j,i]=sqrt(1/dim(incDat)[1]*(sum((pred-testing$hhAnnInc)^2)))
+     }
+}
+colMeans(rmse)
+
+fit=rpart(hhAnnInc~.,data=training,control=rpart.control(cp=0.006))
+pred=predict(fit,newdata=testing)
+1/dim(testing)[1]*(sum((pred-testing$hhAnnInc)^2)) # mse of 93.19 @ cp=0.002. 89.36 @ cp=0.002
+
+summary(fit)
+printcp(fit)
+fancyRpartPlot(fit,main="hw1, p1: constrained rpart on income data")
+
+#missClass(trainSA$chd,preds)
+#pred=NULL;for(i in 1:dim(probs)[1]){pred[i]=which.max(probs[i,1:9])}
+#head(as.factor(pred));head(testing$hhAnnInc)
+#confusionMatrix(as.factor(pred),testing$hhAnnInc)
+
+```
+
+## trees cont'd
+
+```{r}
+house_dat=read.csv("Housetype_Data.txt",header=FALSE,sep=",",
+                  quote="\"",dec=".",fill=TRUE,comment.char="")
+
+colnames(house_dat)=c("home_type","sex","m_status","age","education","occupation",
+                      "hhAnnInc","lived_area","dual_income","per_hh_all","per_hh_18",
+                      "hh_status","ethnic","language")
+
+# check NAs
+sum(is.na(house_dat))/(dim(house_dat)[1]*dim(house_dat)[2])
+for(i in 1:dim(house_dat)[2]){print(sum(is.na(house_dat[,i]))/dim(house_dat)[1])}
+## hhAnnInc at 4%
+
+# type factor variables
+house_dat$hhAnnInc=factor(house_dat$hhAnnInc, 
+                          levels = c("1","2","3","4","5","6","7","8","9"))
+house_dat$hhAnnInc=ordered(house_dat$hhAnnInc, 
+                           levels = c("1","2","3","4","5","6","7","8","9"))
+
+house_dat$age=factor(house_dat$age,levels = c("1","2","3","4","5","6","7"))
+house_dat$age=ordered(house_dat$age,levels = c("1","2","3","4","5","6","7"))
+
+house_dat$education=factor(house_dat$education,levels = c("1","2","3","4","5","6"))
+house_dat$education=ordered(house_dat$education,levels = c("1","2","3","4","5","6"))
+
+house_dat$lived_area=factor(house_dat$lived_area,levels = c("1","2","3","4","5"))
+house_dat$lived_area=ordered(house_dat$lived_area,levels = c("1","2","3","4","5"))
+
+# type factor variables
+for(i in c(1,2,3,6,9,12,13,14)){house_dat[,i]=as.factor(house_dat[,i])}
+
+set=as.data.frame(matrix(data=c(
+     10,10,0.002,4,4,1,0,30,
+     10,10,0.004,4,4,1,0,30,
+     10,10,0.002,4,4,2,0,30,
+     10,10,0.004,4,4,2,0,30,
+     10,10,0.002,4,4,1,1,30,
+     10,10,0.004,4,4,1,1,30,
+     10,10,0.002,4,4,2,1,30,
+     10,10,0.004,4,4,2,1,30
+     ),nrow=8,ncol=8,byrow=T),stringsAsFactors=F)
+
+mis_cl=matrix(NA,10,dim(set)[1])
+
+for(j in 1:dim(mis_cl)[1]){
+     inTrain=createDataPartition(y=house_dat$home_type,p=0.7,list=FALSE)
+     training=house_dat[inTrain,]
+     testing=house_dat[-inTrain,]
+     
+     for(i in 1:dim(set)[1]){
+          fit=rpart(home_type~.,data=training,method="class",
+                    control=rpart.control(minsplit=set[i,1],minbucket=set[i,2],
+                                          cp=set[i,3],maxcompete=set[i,4],
+                                          maxsurrogate=set[i,5],usesurrogate=set[i,6],
+                                          xval=10,surrogatestyle=set[i,7],maxdepth=set[i,8]))
+          
+          pred=predict(fit,newdata=testing,type="class")
+          #pred=NULL;for(k in 1:dim(probs)[1]){pred[k]=which.max(probs[k,1:5])}
+          mis_cl[j,i]=sum(pred!=testing$home_type)/length(pred)
+     }
+}
+colMeans(mis_cl)
+
+# test best model
+inTrain=createDataPartition(y=house_dat$home_type,p=0.7,list=FALSE)
+     training=house_dat[inTrain,]
+     testing=house_dat[-inTrain,]
+
+fit=rpart(home_type~.,data=training,method="class",
+          control=rpart.control(minsplit=10,minbucket=10,cp=0.002,
+                                maxcompete=4,maxsurrogate=4,
+                                usersurrogate=2,surrogatestyle=1))
+pred=predict(fit,newdata=testing,type="class")
+sum(pred!=testing$home_type)/length(pred)
+
+summary(fit)
+printcp(fit)
+fancyRpartPlot(fit,main="hw1, p2: rpart on home data")
+
+# looking into missing condo owners
+for(i in 1:14){a[i]=mean(as.integer(house_dat[,i]),na.rm=T)}
+for(i in 1:14){b[i]=mean(as.integer(house_dat[house_dat$home_type==2,i]),na.rm=T)}
+c=as.data.frame(cbind(a,b))
+c$d=(c[,1]-c[,2])/c[,2]
+c
+names(house_dat[c(6,7,10,11,12)])
+```
+
+## trees cont'd
+
+```{r}
+a=c(rnorm(100,0,1),rnorm(100,10,1))
+b=c(rnorm(100,0,1),rnorm(100,10,1))
+d=a+b+c(rnorm(100,0,1),rnorm(100,10,1))
+par(mfrow=c(1,3))
+plot(a,b);plot(d~a);plot(d~b)
+fit=rpart(d~a+b)
+
+summary(fit)
+par(mfrow=c(1,1))
+fancyRpartPlot(fit,main="hw1, p4: cost delta")
+
+# mse befoe 232
+se_b=233*200
+se_al=2.44*100
+se_ar=3.34*100
+se_b-(se_al+se_ar)
+
+((100*100)/200)*(14.97--0.19)^2
+
+```
+
+### trees cont'd
+```{r}
+library(plyr)
+B=c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17)
+L=c(1,2,3,3,4,4,4,4,5,5,5,5,5,5,5,5,6)
+min_lev = function(B) {
+     round_any(log2(B)+1, 1, f = ceiling)
+}
+L_hat=min_lev(B)
+plot(L~L_hat,main="minimum binary tree levels: estimated v. actual")
+abline(lm(L~L_hat),col="red")
+```
+
+### using gradient boosting machine
+
+```{r}
+dist=c("gaussian","tdist","laplace")
+
+income <- read.table('Income_Data.txt',sep=",",header = FALSE)
+names(income) <- c("income", "sex", "marital", "age", "edu", "occ", "living",
+                   "dual.in", "n.peop", "n.und.18", "household", "h.type",
+                   "ethnic", "language")
+
+for (i in c(2,3,6,8,11,12,13,14)){
+     income[,i] = as.factor(income[,i])
+}
+for (i in c(1,4,5,7,9,10)){
+     income[,i] = as.ordered(income[,i])
+}
+
+test.set <- sample(c(1:8993),2000)
+
+gbm0 <- gbm(income ~., data=income[-test.set,], interaction.depth=4,
+            shrinkage=.1, n.trees=5000,bag.fraction=0.5,cv.folds=5,
+            distribution="gaussian",verbose=T)
+
+best.iter0 <- gbm.perf(gbm0,method="cv");
+yhat <- predict.gbm(gbm0,income[test.set,],type="response",
+                    n.trees = best.iter0);
+mean((as.numeric(income[test.set,1]) - yhat)^2)
+
+fit.inc=gbm(income~.,data=income[-test.set,],train.fraction=1,
+                 interaction.depth=4,shrinkage=.05,
+                 n.trees=2000,bag.fraction=0.5,cv.folds=5,
+                 distribution="gaussian",verbose=F)
+
+     preds.inc=predict(fit.inc,income[test.set,],n.trees=400)
+     print(1/dim(testing)[1]*(sum((preds.inc-as.numeric(income[test.set,1]))^2)))
+     mean((as.numeric(preds.inc) - as.numeric(income[test.set,1]))^2)
+
+     fit.inc=gbm(hhAnnInc~.,data=training,train.fraction=1,
+                 interaction.depth=4,shrinkage=.05,
+                 n.trees=2000,bag.fraction=0.5,cv.folds=5,
+                 distribution="gaussian",verbose=F)
+     preds.inc=predict(fit.inc,testing,n.trees=400)
+     print(1/dim(testing)[1]*(sum((preds.inc-testing$hhAnnInc)^2)))
+     mean((as.numeric(preds.inc) - testing$hhAnnInc)^2)
+
+min(fit.inc$train.error)
+min(fit.inc$valid.error)
+min(fit.inc$cv.error)
+
+# evaluate accuracy
+par(mfrow=c(1,2))
+#gbm.perf(fit.inc,method="test")
+gbm.perf(fit.inc,method="cv")
+gbm.perf(fit.inc,method="OOB")
+title(main = "prediction accuracy: cross-validation and out-of-bag results",
+      line = -2, outer = T)
+# AGAIN, HOW CAN VALIDATION (TEST) ERROR BE SO DIFFERENT FROM CV ERROR?
+
+best.iter.OOB=gbm.perf(fit.inc,method="OOB")
+best.iter.OOB
+best.iter.cv=gbm.perf(fit.inc,method="cv")
+best.iter.cv
+
+# minimum cv error at 
+fit.inc$cv.error[best.iter.cv]
+
+par(mfrow=c(1,1))
+summary(fit.inc,main="relative influence")
+
+par(mfrow=c(2,3))
+for(i in c(5,10,12,2,4,8,11,3,6,7,13,1)){
+     plot(x=fit.inc,i.var=i,n.trees=best.iter.cv)
+}
+title(main = "partial dependence: top four predictors",line = -2, outer = T)
+
+# sex as predictor
+mean(incDat$hhAnnInc)
+mean(incDat$hhAnnInc[as.integer(incDat$sex)==1])
+mean(incDat$hhAnnInc[as.integer(incDat$sex)==2])
+t.test(incDat$hhAnnInc[as.integer(incDat$sex)==1],incDat$hhAnnInc[as.integer(incDat$sex)==2])
+t.test(incDat$hhAnnInc[as.integer(incDat$sex)==2],mu=39.30061) # one-sided is significant
+
+# partial dependence plots
+plot(fit.inc,c(1,5),best.iter.cv,main="") # key illustration
+title(main = "partial dependence: sex and occupation",line = -2, outer = T)
+
+# separating men's incomes from women's household reporting
+par(mfrow=c(1,3))
+hist(incDat$hhAnnInc[incDat$mStatus==1 & incDat$sex==2],
+     main="married women",
+     xlab="$000's per year")
+abline(v=mean(incDat$hhAnnInc[incDat$mStatus==1 & incDat$sex==2],na.rm=T),col="red",lwd=4)
+hist(incDat$hhAnnInc[incDat$mStatus==5 & incDat$sex==2],
+     main="single women",
+     xlab="$000's per year")
+abline(v=mean(incDat$hhAnnInc[incDat$mStatus==5 & incDat$sex==2],na.rm=T),col="red",lwd=4)
+hist(incDat$hhAnnInc[incDat$mStatus==3 & incDat$sex==2],
+     main="divorced women",
+     xlab="$000's per year")
+abline(v=mean(incDat$hhAnnInc[incDat$mStatus==3 & incDat$sex==2],na.rm=T),col="red",lwd=4)
+title(main = "'household' incomes reported by women by marital stauts",line = -1, outer = T)
+t.test(incDat$hhAnnInc[incDat$mStatus==5 & incDat$sex==2],mu=49.28)
+
+par(mfrow=c(1,2))
+hist(incDat$hhAnnInc[incDat$dualInc==3 & incDat$sex==2],
+     main="dual income: no",
+     xlab="$000's per year",cex=0.1)
+abline(v=mean(incDat$hhAnnInc[incDat$dualInc==3 & incDat$sex==2],na.rm=T),col="red",lwd=4)
+hist(incDat$hhAnnInc[incDat$dualInc==1 & incDat$sex==2],
+     main="dual income: not married",
+     xlab="$000's per year")
+abline(v=mean(incDat$hhAnnInc[incDat$dualInc==1 & incDat$sex==2],na.rm=T),col="red",lwd=4)
+title(main = "'household' incomes reported by women",line = -1, outer = T)
+#t.test(mean(incDat$hhAnnInc[incDat$dualIncome==1 & incDat$sex==2],na.rm=T),mu=44.15)
+
+plot(fit.inc,c(1,10,2),best.iter.cv,main="")
+plot(fit.inc,c(1,12),best.iter.cv,main="")
+plot(fit.inc,c(1,2),best.iter.cv,main="")
+plot(fit.inc,c(1,4),best.iter.cv,main="")
+plot(fit.inc,c(1,8),best.iter.cv,main="")
+plot(fit.inc,c(1,11),best.iter.cv,main="")
+plot(fit.inc,c(1,3),best.iter.cv,main="")
+plot(fit.inc,c(1,6),best.iter.cv,main="")
+plot(fit.inc,c(1,7),best.iter.cv,main="")
+plot(fit.inc,c(1,13),best.iter.cv,main="")
+```
+
+### gbm cont'd (occupation)
+
+```{r}
+library(gbm);library(caret)
+# read data
+occDat=read.csv("Occupation_Data.txt",header=FALSE,sep=",",
+                  quote="\"",dec=".",fill=TRUE,comment.char="")
+
+colnames(occDat)=c("occ","homeType","sex","mStat","age","educ","hhAnnInc","areaLive","dualInc","hhPerAll","hhPer18","hhStat","ethnic","language")
+
+# check distribution of y var
+par(mfrow=c(1,1));hist(occDat$occ,col="red",main="occupation distn")
+
+# format vars
+occDat$age=factor(occDat$age,levels = c("1","2","3","4","5","6","7"))
+occDat$age=ordered(occDat$age,levels = c("1","2","3","4","5","6","7"))
+
+occDat$educ=factor(occDat$educ,levels = c("1","2","3","4","5","6"))
+occDat$educ=ordered(occDat$educ,levels = c("1","2","3","4","5","6"))
+
+occDat$hhAnnInc=factor(occDat$hhAnnInc,levels = c("1","2","3","4","5","6","7","8","9"))
+occDat$hhAnnInc=ordered(occDat$hhAnnInc,levels = c("1","2","3","4","5","6","7","8","9"))
+
+occDat$areaLive=factor(occDat$areaLive,levels = c("1","2","3","4","5"))
+occDat$areaLive=ordered(occDat$areaLive,levels = c("1","2","3","4","5"))
+
+occDat$hhPerAll=factor(occDat$hhPerAll,levels = c("1","2","3","4","5","6","7","8","9"))
+occDat$hhPerAll=ordered(occDat$hhPerAll,levels = c("1","2","3","4","5","6","7","8","9"))
+
+occDat$hhPer18=factor(occDat$hhPer18,levels = c("0","1","2","3","4","5","6","7","8","9"))
+occDat$hhPer18=ordered(occDat$hhPer18,levels = c("0","1","2","3","4","5","6","7","8","9"))
+
+for(i in c(1,2,3,4,9,12,13,14)){occDat[,i]=as.factor(occDat[,i])}
+
+# fit model
+## using gbm()
+### fit on all data
+fit.occ=gbm(occ~.,data=occDat,train.fraction=0.8,interaction.depth=4,shrinkage=.05,
+            n.trees=2500,bag.fraction=0.5,cv.folds=5,distribution="multinomial",verbose=F)
+
+### evaluate accuracy
+par(mfrow=c(1,3))
+bi.occ.cv=gbm.perf(fit.occ,method="cv");bi.occ.cv
+bi.occ.test=gbm.perf(fit.occ,method="test");bi.occ.test
+bi.occ.oob=gbm.perf(fit.occ,method="OOB");bi.occ.oob
+title(main = "prediction accuracy: cv, test and out-of-bag results",
+      line = -2, outer = T)
+
+gbm.probs=predict(fit.occ,occDat,type="response") 
+gbm.preds=colnames(gbm.probs)[apply(gbm.probs, 1, which.max)]
+confusionMatrix(gbm.preds,occDat$occ)
+
+### minimum error at 
+fit.occ$cv.error[bi.occ.cv]
+min(fit.occ$cv.error)
+fit.occ$valid.error[bi.occ.test]
+min(fit.occ$valid.error)
+
+### important variables
+par(mfrow=c(1,1))
+summary(fit.occ,main="relative influence")
+
+## using held out test set
+### partition data
+inBuild=createDataPartition(y=occDat$occ,p=0.8,list=FALSE)
+train.occ=occDat[inBuild,];test.occ=occDat[-inBuild,]
+
+## fit on training data
+fit.occ.ho=gbm(occ~.,data=train.occ,train.fraction=1,interaction.depth=4,shrinkage=.05,
+            n.trees=2500,bag.fraction=0.5,cv.folds=0,distribution="multinomial",
+            verbose=F)
+probs.occ.ho=predict(fit.occ.ho,test.occ,type="response",n.trees=250)
+preds.occ.ho=colnames(probs.occ.ho)[apply(probs.occ.ho, 1, which.max)]
+confusionMatrix(preds.occ.ho,test.occ$occ)
+
+par(mfrow=c(1,1))
+bi.occ.oob=gbm.perf(fit.occ,method="OOB");bi.occ.oob
+title(main = "prediction accuracy: out-of-bag results",
+      line = -2, outer = T)
+
+## explain higher misclass in certain classes
+x=hist(occDat$occ,col="red",main="occupation distn")
+countPor=scale(x$counts[x$counts>0])
+classAcc=scale(c(0.8605,0.14013,0.41060,0.33971,0.70149,0.8407,0.44000,0.82014,0.37838))
+plot(countPor,ylim=c(-2,2.5),type="l",col="black",lwd=2,ylab="scaled value",main="classification accuracy and observation count",xlab="class")
+lines(classAcc,lwd=2,col="red")
+cor(classAcc,countPor)
+
+# re-fit adjusting weights
+class=seq(1,9,1)
+sense=c(0.7996,0.031847,0.33113,0.29665,0.56716,0.7797,0.280000,0.76259,0.148649) # (1,1.1,1,1.1,1,1,1,1,1.1)
+wts=rep(NA,dim(occDat)[1])
+for(i in class){
+     wts[as.integer(occDat$occ)==class[i]]=1-sense[i]
+}
+fit.occ=gbm(occ~.,data=occDat,train.fraction=0.8,interaction.depth=4,shrinkage=.05,
+            n.trees=2500,bag.fraction=0.5,cv.folds=5,distribution="multinomial",verbose=F,weights=wts)
+
+### evaluate accuracy
+par(mfrow=c(1,3))
+bi.occ.cv=gbm.perf(fit.occ,method="cv");bi.occ.cv
+bi.occ.test=gbm.perf(fit.occ,method="test");bi.occ.test
+bi.occ.oob=gbm.perf(fit.occ,method="OOB");bi.occ.oob
+title(main = "prediction accuracy: cv, test and out-of-bag results",
+      line = -2, outer = T)
+
+gbm.probs=predict(fit.occ,occDat,type="response") 
+gbm.preds=colnames(gbm.probs)[apply(gbm.probs, 1, which.max)]
+confusionMatrix(gbm.preds,occDat$occ)
+
+### minimum error at 
+fit.occ$valid.error[bi.occ.test]
+min(fit.occ$valid.error)
+```
